@@ -1,0 +1,76 @@
+{
+  "name": "solidworks-mcp-server",
+  "version": "1.0.0",
+  "description": "SolidWorks MCP Server - Intelligent COM Bridge with Dynamic Fallback",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "solidworks-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.1",
+    "dotenv": "^16.4.5",
+    "handlebars": "^4.7.8",
+    "uuid": "^11.0.0",
+    "winax": "^3.4.2",
+    "winston": "^3.15.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.32.0",
+    "@types/dotenv": "^6.1.1",
+    "@types/node": "^22.5.1",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.4.0",
+    "@typescript-eslint/parser": "^8.4.0",
+    "eslint": "^9.9.1",
+    "prettier": "^3.3.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.5.4",
+    "vitest": "^1.2.1"
+  },
+  "keywords": [
+    "mcp",
+    "solidworks",
+    "cad",
+    "automation",
+    "vba",
+    "clean-architecture",
+    "solid-principles",
+    "production-ready"
+  ],
+  "author": "SolidWorks MCP Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jianzhichun/solidworks-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jianzhichun/solidworks-mcp-server/issues"
+  },
+  "homepage": "https://github.com/jianzhichun/solidworks-mcp-server#readme",
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
