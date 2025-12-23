@@ -103,71 +103,82 @@ class SolidWorksMCPServer {
 
     // Register each tool with McpServer
     for (const tool of allTools) {
-      // Extract shape from ZodObject if needed
-      let inputSchema: any = tool.inputSchema;
-      if (tool.inputSchema instanceof z.ZodObject) {
-        inputSchema = tool.inputSchema.shape;
-      }
-      
-      // Extract shape from outputSchema if it's a ZodObject
-      // Use type assertion since not all tools have outputSchema yet
-      const toolWithOutput = tool as typeof tool & { outputSchema?: z.ZodTypeAny };
-      let outputSchema: any = toolWithOutput.outputSchema;
-      if (outputSchema instanceof z.ZodObject) {
-        outputSchema = outputSchema.shape;
-      } else if (!outputSchema) {
-        outputSchema = z.any(); // Use z.any() as fallback if not defined
-      }
-      
-      this.server.registerTool(
-        tool.name,
-        {
-          title: getToolTitle(tool.name),
-          description: tool.description,
-          inputSchema,
-          outputSchema
-        },
-        async (args: any) => {
-          // Log operation start
-          logOperation(tool.name, 'started', args);
-          
-          try {
-            // Record action if recording
-            if (this.config.enableMacroRecording && this.macroRecorder) {
-              try {
-                this.macroRecorder.recordAction(tool.name, tool.description, args);
-              } catch (error) {
-                // Recording not in progress, ignore
-                logger.debug('Macro recording not active', { reason: 'no active recording' });
-              }
-            }
-            
-            // Ensure SolidWorks connection
-            if (!this.api.isConnected()) {
-              await this.api.connect();
-            }
-            
-            // Execute tool handler
-            const result = await tool.handler(args, this.api);
-            
-            // Log operation completion
-            logOperation(tool.name, 'completed', { result });
-            
-            // Return with structured content if available
-            return createToolResult(result);
-          } catch (error) {
-            // Log operation failure
-            logOperation(tool.name, 'failed', { error });
-            
-            // Log error details
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            logError(`Tool "${tool.name}" execution failed`, error instanceof Error ? error : new Error(errorMessage));
-            
-            // Re-throw error - McpServer will automatically convert to proper MCP error format
-            throw error;
-          }
+      try {
+        // Extract shape from ZodObject if needed
+        let inputSchema: any = tool.inputSchema;
+        if (tool.inputSchema instanceof z.ZodObject) {
+          inputSchema = tool.inputSchema.shape;
         }
-      );
+        
+        // Extract shape from outputSchema if it's a ZodObject
+        // Use type assertion since not all tools have outputSchema yet
+        const toolWithOutput = tool as typeof tool & { outputSchema?: z.ZodTypeAny };
+        let outputSchema: any = toolWithOutput.outputSchema;
+        if (outputSchema instanceof z.ZodObject) {
+          outputSchema = outputSchema.shape;
+        } else if (!outputSchema) {
+          outputSchema = z.any(); // Use z.any() as fallback if not defined
+        }
+        
+        this.server.registerTool(
+          tool.name,
+          {
+            title: getToolTitle(tool.name),
+            description: tool.description,
+            inputSchema,
+            outputSchema
+          },
+          async (args: any) => {
+            // Log operation start
+            logOperation(tool.name, 'started', args);
+            
+            try {
+              // Record action if recording
+              if (this.config.enableMacroRecording && this.macroRecorder) {
+                try {
+                  this.macroRecorder.recordAction(tool.name, tool.description, args);
+                } catch (error) {
+                  // Recording not in progress, ignore
+                  logger.debug('Macro recording not active', { reason: 'no active recording' });
+                }
+              }
+              
+              // Ensure SolidWorks connection
+              if (!this.api.isConnected()) {
+                await this.api.connect();
+              }
+              
+              // Execute tool handler
+              const result = await tool.handler(args, this.api);
+              
+              // Log operation completion
+              logOperation(tool.name, 'completed', { result });
+              
+              // Return with structured content if available
+              return createToolResult(result);
+            } catch (error) {
+              // Log operation failure
+              logOperation(tool.name, 'failed', { error });
+              
+              // Log error details
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              logError(`Tool "${tool.name}" execution failed`, error instanceof Error ? error : new Error(errorMessage));
+              
+              // Re-throw error - McpServer will automatically convert to proper MCP error format
+              throw error;
+            }
+          }
+        );
+      } catch (error) {
+        // Handle tool already registered error gracefully (common in test environments)
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('already registered')) {
+          logger.debug(`Tool "${tool.name}" already registered, skipping`, { tool: tool.name });
+        } else {
+          // Re-throw other errors
+          throw error;
+        }
+      }
     }
   }
 
@@ -259,15 +270,23 @@ async function main() {
     await server.start();
   } catch (error) {
     logError('Fatal error', error);
-    process.exit(1);
+    // Only exit in non-test environments
+    if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+      process.exit(1);
+    } else {
+      throw error;
+    }
   }
 }
 
 // Always run main when this file is executed
-main().catch((error) => {
-  // Don't use console.error in MCP servers - it interferes with JSON-RPC
-  logError('Failed to start SolidWorks MCP Server', error);
-  process.exit(1);
-});
+// Skip auto-start in test environment to avoid process.exit issues
+if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+  main().catch((error) => {
+    // Don't use console.error in MCP servers - it interferes with JSON-RPC
+    logError('Failed to start SolidWorks MCP Server', error);
+    process.exit(1);
+  });
+}
 
 export { SolidWorksMCPServer };

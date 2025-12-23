@@ -125,10 +125,18 @@ export function withCOMObject<T, R>(
   const safe = new SafeCOMRef(obj);
 
   try {
-    return Promise.resolve(callback(safe.get()));
+    const result = callback(safe.get());
+    // If callback returns a Promise, handle it; otherwise wrap in Promise.resolve
+    if (result instanceof Promise) {
+      return result.catch((error) => {
+        logger.warn('COM object operation failed', error instanceof Error ? error : new Error(String(error)));
+        throw error;
+      });
+    }
+    return Promise.resolve(result);
   } catch (error) {
     logger.warn('COM object operation failed', error instanceof Error ? error : new Error(String(error)));
-    throw error;
+    return Promise.reject(error);
   } finally {
     // Properly release the COM object to prevent memory leaks
     safe.release();

@@ -1452,5 +1452,118 @@ Dimension types:
         };
       }
     }
+  },
+
+  // ============================================
+  // EXTRUSION TOOLS
+  // ============================================
+  
+  {
+    name: 'extrude',
+    description: `Create a boss/base extrusion from the current or most recent sketch.
+The sketch must contain a closed profile (rectangle, circle, or closed polygon).
+This creates a solid body by extruding the sketch profile to the specified depth.
+
+Parameters:
+- depth: Extrusion depth in mm (default: 25)
+- reverse: Extrude in opposite direction (default: false)
+- draft: Draft angle in degrees (default: 0, max: 89)
+
+Returns the feature ID of the created extrusion.`,
+    inputSchema: z.object({
+      depth: z.number().positive().default(25).describe('Extrusion depth in mm'),
+      reverse: z.boolean().default(false).describe('Reverse extrusion direction'),
+      draft: z.number().min(0).max(89).default(0).describe('Draft angle in degrees (0-89)')
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      featureId: z.string().optional(),
+      message: z.string().optional(),
+      error: z.string().optional()
+    }),
+    handler: (args: any, swApi: SolidWorksAPI) => {
+      try {
+        const result = swApi.extrude({
+          depth: args.depth || 25,
+          reverse: args.reverse || false,
+          draft: args.draft || 0
+        });
+        
+        if (result.success) {
+          return {
+            success: true,
+            featureId: result.featureId,
+            message: `Extrusion created successfully with depth ${args.depth || 25}mm`
+          };
+        } else {
+          return {
+            success: false,
+            error: result.error || 'Extrusion failed'
+          };
+        }
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message || String(error)
+        };
+      }
+    }
+  },
+
+  {
+    name: 'extrude_cut',
+    description: `Create a cut extrusion to remove material from an existing solid body.
+The sketch must be placed on a face of an existing body and contain a closed profile.
+This removes material by extruding the sketch profile into the solid body.
+
+Parameters:
+- depth: Cut depth in mm (default: 25)
+- reverse: Cut in opposite direction (default: false)
+- draft: Draft angle in degrees (default: 0, max: 89)
+
+Use this tool for:
+- Creating holes (circular sketches)
+- Creating pockets (rectangular sketches)
+- Creating complex cutouts (any closed sketch profile)
+
+Returns the feature ID of the created cut extrusion.`,
+    inputSchema: z.object({
+      depth: z.number().positive().default(25).describe('Cut depth in mm'),
+      reverse: z.boolean().default(false).describe('Reverse cut direction'),
+      draft: z.number().min(0).max(89).default(0).describe('Draft angle in degrees (0-89)')
+    }),
+    outputSchema: z.object({
+      success: z.boolean(),
+      featureId: z.string().optional(),
+      message: z.string().optional(),
+      error: z.string().optional()
+    }),
+    handler: (args: any, swApi: SolidWorksAPI) => {
+      try {
+        const result = swApi.extrudeCut({
+          depth: args.depth || 25,
+          reverse: args.reverse || false,
+          draft: args.draft || 0
+        });
+        
+        if (result.success) {
+          return {
+            success: true,
+            featureId: result.featureId,
+            message: `Cut extrusion created successfully with depth ${args.depth || 25}mm`
+          };
+        } else {
+          return {
+            success: false,
+            error: result.error || 'Cut extrusion failed'
+          };
+        }
+      } catch (error: any) {
+        return {
+          success: false,
+          error: error.message || String(error)
+        };
+      }
+    }
   }
 ];

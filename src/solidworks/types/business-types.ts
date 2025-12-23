@@ -29,17 +29,6 @@ export interface SolidWorksConfiguration {
   parent?: string;
 }
 
-export interface MassProperties {
-  mass: number;
-  volume: number;
-  surfaceArea: number;
-  centerOfMass: {
-    x: number;
-    y: number;
-    z: number;
-  };
-}
-
 export interface ExportOptions {
   format: 'STEP' | 'IGES' | 'STL' | 'PDF' | 'DXF' | 'DWG';
   version?: string;

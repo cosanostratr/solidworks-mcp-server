@@ -137,10 +137,32 @@ export class ModelHelpers {
   static getModelTitle(model: IModelDoc2 | null): string {
     if (!model) return 'None';
     try {
-      if (model.GetTitle) return model.GetTitle();
+      if (model.GetTitle) {
+        try {
+          return model.GetTitle();
+        } catch (e) {
+          // GetTitle failed, try GetPathName as fallback
+          if (model.GetPathName) {
+            try {
+              const pathStr = model.GetPathName();
+              if (pathStr && pathStr.trim()) {
+                return pathStr.split('\\').pop() ?? 'Untitled';
+              }
+            } catch (e2) {
+              // GetPathName also failed
+            }
+          }
+        }
+      }
       if (model.GetPathName) {
-        const pathStr = model.GetPathName();
-        return pathStr ? (pathStr.split('\\').pop() ?? 'Untitled') : 'Untitled';
+        try {
+          const pathStr = model.GetPathName();
+          if (pathStr && pathStr.trim()) {
+            return pathStr.split('\\').pop() ?? 'Untitled';
+          }
+        } catch (e) {
+          // GetPathName failed
+        }
       }
     } catch (e) {
       // Ignore

@@ -357,23 +357,23 @@ export interface IFeatureManager {
   ): IFeature | null;
 
   FeatureExtrusion2(
-    sd: boolean | number,
-    flip: boolean | number,
-    dir: boolean | number,
-    t1: number,
-    t2: number,
-    d1: number,
-    d2: number,
-    dchk1?: boolean | number,
-    dchk2?: boolean | number,
-    ddir1?: boolean | number,
-    ddir2?: boolean | number,
-    dang1?: number,
-    dang2?: number,
-    offsetReverse1?: boolean | number,
-    offsetReverse2?: boolean | number,
-    translateSurface1?: boolean | number,
-    translateSurface2?: boolean | number
+    sd: boolean | number,           // 单向拉伸 (false) 或 双向 (true)
+    flip: boolean | number,          // 反转拉伸方向
+    dir: boolean | number,           // 拉伸方向
+    t1: number,                      // 方向1终止条件 (swEndCondBlind=0)
+    t2: number,                      // 方向2终止条件
+    d1: number,                      // 方向1深度
+    d2: number,                      // 方向2深度
+    dchk1: boolean | number,         // 方向1是否拔模
+    dchk2: boolean | number,         // 方向2是否拔模
+    ddir1: boolean | number,         // 方向1拔模方向
+    ddir2: boolean | number,         // 方向2拔模方向
+    dang1: number,                   // 方向1拔模角度(弧度)
+    dang2: number,                   // 方向2拔模角度(弧度)
+    merge?: boolean | number,        // 是否合并结果体
+    useFeatScope?: boolean | number, // 是否使用特征范围
+    useAutoSelect?: boolean | number,// 是否自动选择
+    scope?: any                      // 特征范围对象
   ): IFeature | null;
 
   FeatureExtrusion3(

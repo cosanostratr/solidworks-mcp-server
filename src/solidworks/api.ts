@@ -19,13 +19,18 @@ import {
   selectByID2Fallback,
   prepareForExtrusion,
   selectSketchForExtrusion,
+  validateSketchSelectionBeforeExtrusion,
   tryFeatureExtrusion3,
   tryFeatureExtrusion2,
   tryFeatureExtrusion,
+  tryFeatureExtrusionWithFeatureData,
+  tryFeatureCut3,
   generateVBAFallbackMacro,
   finalizeExtrusion,
   ModelHelpers,
 } from './helpers/index.js';
+import { getFeatureInfo } from '../utils/feature-utils.js';
+import { COM } from '../utils/com-boolean.js';
 
 // Operation imports
 import {
@@ -127,60 +132,213 @@ export class SolidWorksAPI {
   ): SolidWorksFeature {
     if (!this.currentModel) throw new Error('No model open');
 
-    try {
-      const featureMgr = this.currentModel.FeatureManager;
-      if (!featureMgr) {
-        throw new Error('Cannot access FeatureManager');
-      }
-
-      prepareForExtrusion(this.currentModel);
-      selectSketchForExtrusion(this.currentModel);
-
-      const depthInMeters = depth / 1000;
-      let feature = null;
-
-      try {
-        feature = tryFeatureExtrusion3(featureMgr, depthInMeters, reverse);
-        logger.info('FeatureExtrusion3 succeeded');
-      } catch (e) {
-        logger.warn(`FeatureExtrusion3 failed: ${e}`);
-        try {
-          feature = tryFeatureExtrusion2(featureMgr, depthInMeters, reverse);
-          logger.info('FeatureExtrusion2 succeeded');
-        } catch (e2) {
-          logger.warn(`FeatureExtrusion2 failed: ${e2}`);
-          try {
-            feature = tryFeatureExtrusion(featureMgr, depthInMeters, reverse);
-            logger.info('FeatureExtrusion succeeded');
-          } catch (e3) {
-            logger.error(`All extrusion methods failed: ${e3}`);
-            const macroPath = generateVBAFallbackMacro(depth, reverse);
-            const errorMsg = macroPath
-              ? `Extrusion failed due to COM interface limitations. A VBA macro has been generated at: ${macroPath}. Please run it manually in SolidWorks, or use the 'create_feature_vba' tool to generate a macro.`
-              : `Extrusion failed due to COM interface limitations. Please use the 'create_feature_vba' tool to generate a VBA macro, or create one manually in SolidWorks.`;
-            throw new Error(errorMsg);
-          }
-        }
-      }
-
-      return finalizeExtrusion(this.currentModel, feature);
-    } catch (error) {
-      throw new Error(`Extrusion failed: ${error}`);
+    const model = this.currentModel;
+    const featureMgr = model.FeatureManager;
+    if (!featureMgr) {
+      throw new Error('Cannot access FeatureManager');
     }
+
+    // 1. 准备拉伸：退出草图模式
+    prepareForExtrusion(model);
+
+    // 2. 选择草图
+    selectSketchForExtrusion(model);
+
+    // 3. 检查是否是第一个拉伸（基体）
+    let isFirstExtrusion = true;
+    try {
+      let checkIdx = 0;
+      while (checkIdx < 10) {
+        const checkFeat = model.FeatureByPositionReverse(checkIdx);
+        if (!checkFeat) break;
+        try {
+          const { typeName } = getFeatureInfo(checkFeat);
+          if (typeName && (typeName.includes('Extrude') || typeName.includes('拉伸'))) {
+            isFirstExtrusion = false;
+            break;
+          }
+        } catch (e) {
+          // Continue
+        }
+        checkIdx++;
+      }
+    } catch (e) {
+      // Assume first extrusion
+    }
+
+    // 4. 验证草图选择
+    const validation = validateSketchSelectionBeforeExtrusion(model, isFirstExtrusion);
+    if (!validation.success) {
+      throw new Error(validation.error || 'Sketch validation failed');
+    }
+
+    // 5. 转换参数
+    const depthInMeters = depth / 1000;
+
+    // 6. 尝试使用 helper 函数创建拉伸（按优先级顺序）
+    let feature: any = null;
+    let lastError: Error | null = null;
+
+    // 方法1: 尝试 FeatureExtrusion3（最完整的方法）
+    try {
+      feature = tryFeatureExtrusion3(featureMgr, depthInMeters, reverse, isFirstExtrusion, draft);
+      if (feature) {
+        console.log(`  [DEBUG] createExtrude: FeatureExtrusion3 成功`);
+        return finalizeExtrusion(model, feature);
+      }
+    } catch (err: any) {
+      lastError = err;
+      console.log(`  [DEBUG] createExtrude: FeatureExtrusion3 失败: ${err.message || err}`);
+    }
+
+    // 方法2: 尝试 FeatureExtrusion2（如果 FeatureExtrusion3 失败）
+    if (!feature) {
+      try {
+        feature = tryFeatureExtrusion2(featureMgr, depthInMeters, reverse, isFirstExtrusion);
+        if (feature) {
+          console.log(`  [DEBUG] createExtrude: FeatureExtrusion2 成功`);
+          return finalizeExtrusion(model, feature);
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.log(`  [DEBUG] createExtrude: FeatureExtrusion2 失败: ${err.message || err}`);
+      }
+    }
+
+    // 方法3: 尝试 FeatureExtrusion（最基础的方法）
+    if (!feature) {
+      try {
+        feature = tryFeatureExtrusion(featureMgr, depthInMeters, reverse, isFirstExtrusion);
+        if (feature) {
+          console.log(`  [DEBUG] createExtrude: FeatureExtrusion 成功`);
+          return finalizeExtrusion(model, feature);
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.log(`  [DEBUG] createExtrude: FeatureExtrusion 失败: ${err.message || err}`);
+      }
+    }
+
+    // 方法4: 尝试 FeatureData 模式（如果可用）
+    if (!feature) {
+      try {
+        feature = tryFeatureExtrusionWithFeatureData(featureMgr, depthInMeters, reverse, isFirstExtrusion);
+        if (feature) {
+          console.log(`  [DEBUG] createExtrude: FeatureExtrusionWithFeatureData 成功`);
+          return finalizeExtrusion(model, feature);
+        }
+      } catch (err: any) {
+        lastError = err;
+        console.log(`  [DEBUG] createExtrude: FeatureExtrusionWithFeatureData 失败: ${err.message || err}`);
+      }
+    }
+
+    // 所有方法都失败
+    const errorMessage = lastError 
+      ? `All extrusion methods failed. Last error: ${lastError.message}`
+      : 'All extrusion methods returned null';
+    throw new Error(errorMessage);
   }
 
   extrude(params: ExtrudeParams): { success: boolean; featureId?: string; error?: string } {
-    if (!this.currentModel) throw new Error('No active model');
+    if (!this.currentModel) {
+      return { success: false, error: 'No active model' };
+    }
     
     const { depth = 25, reverse = false, draft = 0 } = params;
     
-    const feature = this.createExtrude(depth, draft, reverse);
-    
-    if (feature) {
-      return { success: true, featureId: feature.name };
+    try {
+      const feature = this.createExtrude(depth, draft, reverse);
+      
+      if (feature) {
+        return { success: true, featureId: feature.name };
+      }
+      
+      return { success: false, error: 'Failed to create extrusion - feature is null' };
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Extrusion failed: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * 创建切除拉伸（从现有实体中移除材料）
+   */
+  createExtrudeCut(
+    depth: number,
+    draft: number = 0,
+    reverse: boolean = false
+  ): SolidWorksFeature {
+    if (!this.currentModel) throw new Error('No model open');
+
+    const model = this.currentModel;
+    const featureMgr = model.FeatureManager;
+    if (!featureMgr) {
+      throw new Error('Cannot access FeatureManager');
+    }
+
+    // 1. 准备拉伸：退出草图模式
+    prepareForExtrusion(model);
+
+    // 2. 选择草图
+    selectSketchForExtrusion(model);
+
+    // 3. 验证草图选择（切除拉伸不是第一个拉伸）
+    const validation = validateSketchSelectionBeforeExtrusion(model, false);
+    if (!validation.success) {
+      throw new Error(validation.error || 'Sketch validation failed');
+    }
+
+    // 4. 转换参数
+    const depthInMeters = depth / 1000;
+
+    // 5. 尝试创建切除拉伸
+    let feature: any = null;
+    let lastError: Error | null = null;
+
+    // 使用 tryFeatureCut3
+    try {
+      feature = tryFeatureCut3(featureMgr, depthInMeters, reverse, draft);
+      if (feature) {
+        console.log(`  [DEBUG] createExtrudeCut: tryFeatureCut3 成功`);
+        return finalizeExtrusion(model, feature);
+      }
+    } catch (err: any) {
+      lastError = err;
+      console.log(`  [DEBUG] createExtrudeCut: tryFeatureCut3 失败: ${err.message || err}`);
+    }
+
+    // 所有方法都失败
+    const errorMessage = lastError 
+      ? `Cut extrusion failed. Last error: ${lastError.message}`
+      : 'Cut extrusion returned null - ensure sketch is on existing body';
+    throw new Error(errorMessage);
+  }
+
+  /**
+   * 切除拉伸的简化接口
+   */
+  extrudeCut(params: ExtrudeParams): { success: boolean; featureId?: string; error?: string } {
+    if (!this.currentModel) {
+      return { success: false, error: 'No active model' };
     }
     
-    return { success: false, error: 'Failed to create extrusion' };
+    const { depth = 25, reverse = false, draft = 0 } = params;
+    
+    try {
+      const feature = this.createExtrudeCut(depth, draft, reverse);
+      
+      if (feature) {
+        return { success: true, featureId: feature.name };
+      }
+      
+      return { success: false, error: 'Failed to create cut extrusion - feature is null' };
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error(`Cut extrusion failed: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    }
   }
 
   // Public helper methods (delegated to ModelHelpers)

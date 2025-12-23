@@ -1,4 +1,4 @@
-import { logger } from '../utils/logger.js';
+import { logger } from '../../utils/logger.js';
 import { ISldWorksApp, IModelDoc2 } from '../types/com-types.js';
 import { SolidWorksModel } from '../types/business-types.js';
 import { ModelHelpers } from '../helpers/model.js';

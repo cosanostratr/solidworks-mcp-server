@@ -59,6 +59,8 @@ export class SolidWorksConfig {
    * Attempts multiple strategies to find the correct template location
    */
   static getDefaultTemplates(swApp: any): SolidWorksTemplates | null {
+    if (!swApp) return null;
+    
     try {
       // Strategy 1: Try to get user preference templates
       try {
@@ -88,7 +90,13 @@ export class SolidWorksConfig {
         };
       }
 
-      // Strategy 3: Try version-independent paths
+      // Strategy 3: Try version-independent paths (only if version is null, not if it failed)
+      // If version is null and we couldn't get user preferences, return null
+      if (version === null) {
+        return null;
+      }
+
+      // Fallback to generic path only if version exists but year is missing
       const genericBasePath = 'C:\\ProgramData\\SolidWorks\\templates';
       return {
         part: `${genericBasePath}\\Part.prtdot`,
@@ -153,13 +161,30 @@ export class SolidWorksConfig {
   static getInstallInfo(swApp: any): Record<string, any> {
     const info: Record<string, any> = {};
 
+    // Try to get version, capturing any errors
     try {
-      const version = this.getVersion(swApp);
-      if (version) {
-        info.version = version;
+      if (!swApp) {
+        info.versionError = 'SolidWorks application is null';
+      } else {
+        // Try to call RevisionNumber to see if it throws
+        try {
+          if (typeof swApp.RevisionNumber === 'function') {
+            const revisionNumber = swApp.RevisionNumber();
+            if (revisionNumber) {
+              const version = this.getVersion(swApp);
+              if (version) {
+                info.version = version;
+              }
+            }
+          } else {
+            info.versionError = 'RevisionNumber is not a function';
+          }
+        } catch (e) {
+          info.versionError = String(e instanceof Error ? e : new Error(String(e)));
+        }
       }
     } catch (e) {
-      info.versionError = String(e);
+      info.versionError = String(e instanceof Error ? e : new Error(String(e)));
     }
 
     try {

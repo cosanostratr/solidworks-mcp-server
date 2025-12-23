@@ -1,5 +1,5 @@
 import winax from 'winax';
-import { logger } from '../utils/logger.js';
+import { logger } from '../../utils/logger.js';
 import { ISldWorksApp } from '../types/com-types.js';
 
 /**

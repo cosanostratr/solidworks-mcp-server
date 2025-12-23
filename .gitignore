@@ -61,7 +61,7 @@ TEST_RESULTS.json
 venv/
 __pycache__/
 *.pyc
-EOF < /dev/null
 
+# IDE/Editor temp directories
 .claude/
-.cursor
+.cursor/

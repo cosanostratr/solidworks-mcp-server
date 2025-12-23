@@ -22,7 +22,16 @@ export function getFeatureName(feature: any): string {
   if (!feature) return '';
 
   try {
-    return feature.Name || (feature.GetName ? feature.GetName() : '') || '';
+    // Check if Name exists and is a string
+    if (feature.Name && typeof feature.Name === 'string') {
+      return feature.Name;
+    }
+    // Try GetName method
+    if (feature.GetName) {
+      const name = feature.GetName();
+      return typeof name === 'string' ? name : '';
+    }
+    return '';
   } catch (error) {
     logger.debug('Failed to get feature name', error as Error);
     return '';
